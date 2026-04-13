@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCU Tracker</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: #0d0d0d;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1a0a0a 0%, #2d0a0a 50%, #1a0a0a 100%);
+            padding: 30px 40px;
+            text-align: center;
+            border-bottom: 2px solid #e23636;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        header h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #e23636, #f0f0f0, #e23636);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: shimmer 3s linear infinite;
+        }
+
+        @keyframes shimmer { to { background-position: 200% center; } }
+
+        .stats { margin-top: 10px; font-size: 0.95rem; color: #8a8a8a; }
+        .stats span { color: #e23636; font-weight: 600; }
+
+        .filter-bar { display: flex; justify-content: center; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
+
+        .filter-btn {
+            padding: 6px 18px; border: 1px solid #333; border-radius: 20px;
+            background: transparent; color: #8a8a8a; cursor: pointer;
+            font-family: 'Poppins', sans-serif; font-size: 0.85rem; transition: all 0.3s;
+        }
+
+        .filter-btn:hover, .filter-btn.active { background: #e23636; color: #fff; border-color: #e23636; }
+
+        .sync-bar {
+            display: flex; justify-content: center; align-items: center;
+            gap: 8px; margin-top: 10px; font-size: 0.8rem; color: #555;
+        }
+
+        .sync-bar .sync-code {
+            background: #222; padding: 2px 10px; border-radius: 6px;
+            font-family: monospace; color: #e23636; letter-spacing: 2px; cursor: pointer;
+        }
+
+        .sync-bar .sync-status { width: 8px; height: 8px; border-radius: 50%; background: #555; display: inline-block; }
+        .sync-bar .sync-status.connected { background: #4caf50; }
+        .sync-bar .sync-status.error { background: #e23636; }
+
+        .sync-bar button {
+            background: none; border: 1px solid #333; color: #8a8a8a;
+            padding: 2px 10px; border-radius: 6px; cursor: pointer;
+            font-family: 'Poppins', sans-serif; font-size: 0.75rem;
+        }
+        .sync-bar button:hover { border-color: #e23636; color: #e23636; }
+
+        .progress-bar-container { width: 200px; height: 6px; background: #333; border-radius: 3px; margin: 8px auto 0; overflow: hidden; }
+        .progress-bar { height: 100%; background: linear-gradient(90deg, #e23636, #ff6b6b); border-radius: 3px; transition: width 0.5s ease; }
+
+        .section { padding: 30px 40px; }
+        .section h2 { font-size: 1.4rem; font-weight: 600; margin-bottom: 20px; color: #c0c0c0; display: flex; align-items: center; gap: 10px; }
+        .section h2 .count { font-size: 0.8rem; background: #222; padding: 2px 10px; border-radius: 10px; color: #8a8a8a; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; }
+
+        .movie-card {
+            position: relative; border-radius: 12px; overflow: hidden; cursor: pointer;
+            transition: transform 0.3s, box-shadow 0.3s; aspect-ratio: 2/3; background: #1a1a1a;
+        }
+
+        .movie-card:hover { transform: translateY(-6px); box-shadow: 0 12px 30px rgba(226, 54, 54, 0.2); }
+
+        .movie-card img {
+            width: 100%; height: 100%; object-fit: cover;
+            filter: grayscale(100%) brightness(0.4); transition: filter 0.5s ease;
+        }
+        .movie-card.watched img { filter: grayscale(0%) brightness(1); }
+
+        .movie-card .placeholder {
+            width: 100%; height: 100%; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; text-align: center; padding: 15px;
+            background: linear-gradient(135deg, #1a1a1a, #111);
+            filter: grayscale(100%) brightness(0.4); transition: filter 0.5s ease;
+        }
+        .movie-card.watched .placeholder { filter: grayscale(0%) brightness(1); background: linear-gradient(135deg, #2d0a0a, #1a0a0a); }
+
+        .placeholder .emoji { font-size: 2.5rem; margin-bottom: 8px; }
+        .placeholder .title { font-size: 0.75rem; font-weight: 600; color: #c0c0c0; }
+        .placeholder .year { font-size: 0.7rem; color: #555; margin-top: 4px; }
+
+        .type-badge {
+            position: absolute; top: 8px; left: 8px; padding: 2px 8px; border-radius: 4px;
+            font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; z-index: 2;
+        }
+        .type-badge.film { background: #e23636; color: #fff; }
+        .type-badge.serie { background: #1e88e5; color: #fff; }
+        .type-badge.special { background: #f5a623; color: #000; }
+
+        .movie-card .overlay {
+            position: absolute; bottom: 0; left: 0; right: 0; padding: 12px 10px;
+            background: linear-gradient(transparent, rgba(0,0,0,0.9)); opacity: 0; transition: opacity 0.3s;
+        }
+        .movie-card:hover .overlay { opacity: 1; }
+        .overlay .movie-title { font-size: 0.75rem; font-weight: 600; line-height: 1.3; }
+        .overlay .movie-year { font-size: 0.65rem; color: #8a8a8a; }
+
+        .movie-card .check {
+            position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 50%;
+            background: rgba(0,0,0,0.6); border: 2px solid #555; display: flex; align-items: center;
+            justify-content: center; font-size: 14px; opacity: 0; transition: opacity 0.3s;
+        }
+        .movie-card:hover .check, .movie-card.watched .check { opacity: 1; }
+        .movie-card.watched .check { background: #e23636; border-color: #e23636; }
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal { background: #1a1a1a; border-radius: 16px; padding: 40px; max-width: 500px; width: 90%; border: 1px solid #333; }
+        .modal h2 { color: #e23636; margin-bottom: 15px; font-size: 1.3rem; }
+        .modal p { color: #8a8a8a; font-size: 0.9rem; line-height: 1.6; margin-bottom: 20px; }
+        .modal a { color: #e23636; }
+        .modal input {
+            width: 100%; padding: 12px 16px; border-radius: 8px; border: 1px solid #333;
+            background: #222; color: #e0e0e0; font-family: 'Poppins', sans-serif; font-size: 0.9rem;
+            margin-bottom: 15px; outline: none;
+        }
+        .modal input:focus { border-color: #e23636; }
+        .modal-actions { display: flex; gap: 10px; }
+        .btn { padding: 10px 24px; border-radius: 8px; border: none; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 0.9rem; font-weight: 600; transition: all 0.3s; }
+        .btn-primary { background: #e23636; color: white; }
+        .btn-primary:hover { background: #c02020; }
+        .btn-secondary { background: transparent; color: #8a8a8a; border: 1px solid #333; }
+        .btn-secondary:hover { border-color: #666; color: #ccc; }
+
+        .loading-spinner { text-align: center; padding: 60px; color: #8a8a8a; }
+        .loading-spinner::after {
+            content: ''; display: block; width: 40px; height: 40px; margin: 15px auto;
+            border: 3px solid #333; border-top-color: #e23636; border-radius: 50%; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 768px) {
+            header { padding: 20px; }
+            header h1 { font-size: 1.5rem; }
+            .section { padding: 20px; }
+            .grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>MCU Tracker</h1>
+    <div class="stats">
+        <span id="watched-count">0</span> von <span id="total-count">0</span> gesehen
+        <div class="progress-bar-container">
+            <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+        </div>
+    </div>
+    <div class="filter-bar">
+        <button class="filter-btn active" data-filter="all">Alle</button>
+        <button class="filter-btn" data-filter="watched">Gesehen</button>
+        <button class="filter-btn" data-filter="unwatched">Noch nicht gesehen</button>
+        <button class="filter-btn" data-filter="film">Filme</button>
+        <button class="filter-btn" data-filter="serie">Serien</button>
+        <button class="filter-btn" data-filter="special">Specials</button>
+    </div>
+    <div class="sync-bar" id="sync-bar" style="display:none;">
+        <span class="sync-status" id="sync-status"></span>
+        <span>Sync-Code:</span>
+        <span class="sync-code" id="sync-code-display" title="Klicken zum Kopieren"></span>
+        <button onclick="showSyncModal()">Einstellungen</button>
+    </div>
+</header>
+
+<div id="app">
+    <div class="loading-spinner">Lade MCU...</div>
+</div>
+
+<!-- Firebase Sync Modal -->
+<div class="modal-overlay" id="sync-modal" style="display:none;">
+    <div class="modal">
+        <h2>Sync einrichten</h2>
+        <p>
+            Um deinen Fortschritt zwischen Geraeten zu synchronisieren, brauchst du eine kostenlose
+            <a href="https://console.firebase.google.com/" target="_blank">Firebase Realtime Database</a>.<br><br>
+            1. Erstelle ein Firebase-Projekt (kostenlos)<br>
+            2. Gehe zu Realtime Database &rarr; Datenbank erstellen<br>
+            3. Waehle "Im Testmodus starten"<br>
+            4. Kopiere die Datenbank-URL hier rein
+        </p>
+        <input type="text" id="firebase-url-input" placeholder="Firebase Datenbank-URL...">
+        <input type="text" id="sync-code-input" placeholder="Sync-Code (leer lassen = neuer Code)">
+        <p style="font-size:0.8rem; color:#555; margin-bottom:15px;">
+            Nutze den gleichen Sync-Code wie im Disney Tracker!
+        </p>
+        <div class="modal-actions">
+            <button class="btn btn-primary" onclick="saveSyncConfig()">Verbinden</button>
+            <button class="btn btn-secondary" onclick="skipSync()">Ohne Sync starten</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// MCU DATABASE
+// ============================================================
+const ENTRIES = [
+    // === PHASE 1 ===
+    { id: "mcu-001", title: "Iron Man", titleEn: "Iron Man", year: 2008, phase: 1, type: "film" },
+    { id: "mcu-002", title: "Der unglaubliche Hulk", titleEn: "The Incredible Hulk", year: 2008, phase: 1, type: "film" },
+    { id: "mcu-003", title: "Iron Man 2", titleEn: "Iron Man 2", year: 2010, phase: 1, type: "film" },
+    { id: "mcu-004", title: "Thor", titleEn: "Thor", year: 2011, phase: 1, type: "film" },
+    { id: "mcu-005", title: "Captain America: The First Avenger", titleEn: "Captain America: The First Avenger", year: 2011, phase: 1, type: "film" },
+    { id: "mcu-006", title: "The Avengers", titleEn: "The Avengers", year: 2012, phase: 1, type: "film" },
+
+    // === PHASE 2 ===
+    { id: "mcu-007", title: "Iron Man 3", titleEn: "Iron Man 3", year: 2013, phase: 2, type: "film" },
+    { id: "mcu-008", title: "Thor: The Dark Kingdom", titleEn: "Thor: The Dark World", year: 2013, phase: 2, type: "film" },
+    { id: "mcu-009", title: "Captain America: The Return of the First Avenger", titleEn: "Captain America: The Winter Soldier", year: 2014, phase: 2, type: "film" },
+    { id: "mcu-010", title: "Guardians of the Galaxy", titleEn: "Guardians of the Galaxy", year: 2014, phase: 2, type: "film" },
+    { id: "mcu-011", title: "Avengers: Age of Ultron", titleEn: "Avengers: Age of Ultron", year: 2015, phase: 2, type: "film" },
+    { id: "mcu-012", title: "Ant-Man", titleEn: "Ant-Man", year: 2015, phase: 2, type: "film" },
+
+    // === PHASE 3 ===
+    { id: "mcu-013", title: "Captain America: Civil War", titleEn: "Captain America: Civil War", year: 2016, phase: 3, type: "film" },
+    { id: "mcu-014", title: "Doctor Strange", titleEn: "Doctor Strange", year: 2016, phase: 3, type: "film" },
+    { id: "mcu-015", title: "Guardians of the Galaxy Vol. 2", titleEn: "Guardians of the Galaxy Vol. 2", year: 2017, phase: 3, type: "film" },
+    { id: "mcu-016", title: "Spider-Man: Homecoming", titleEn: "Spider-Man: Homecoming", year: 2017, phase: 3, type: "film" },
+    { id: "mcu-017", title: "Thor: Tag der Entscheidung", titleEn: "Thor: Ragnarok", year: 2017, phase: 3, type: "film" },
+    { id: "mcu-018", title: "Black Panther", titleEn: "Black Panther", year: 2018, phase: 3, type: "film" },
+    { id: "mcu-019", title: "Avengers: Infinity War", titleEn: "Avengers: Infinity War", year: 2018, phase: 3, type: "film" },
+    { id: "mcu-020", title: "Ant-Man and the Wasp", titleEn: "Ant-Man and the Wasp", year: 2018, phase: 3, type: "film" },
+    { id: "mcu-021", title: "Captain Marvel", titleEn: "Captain Marvel", year: 2019, phase: 3, type: "film" },
+    { id: "mcu-022", title: "Avengers: Endgame", titleEn: "Avengers: Endgame", year: 2019, phase: 3, type: "film" },
+    { id: "mcu-023", title: "Spider-Man: Far From Home", titleEn: "Spider-Man: Far From Home", year: 2019, phase: 3, type: "film" },
+
+    // === PHASE 4 ===
+    { id: "mcu-024", title: "WandaVision (Staffel 1)", titleEn: "WandaVision", year: 2021, phase: 4, type: "serie", tmdbType: "tv", tmdbId: 85271 },
+    { id: "mcu-025", title: "The Falcon and the Winter Soldier (Staffel 1)", titleEn: "The Falcon and the Winter Soldier", year: 2021, phase: 4, type: "serie", tmdbType: "tv", tmdbId: 88396 },
+    { id: "mcu-026", title: "Loki (Staffel 1)", titleEn: "Loki", year: 2021, phase: 4, type: "serie", tmdbType: "tv", tmdbId: 84958 },
+    { id: "mcu-027", title: "Black Widow", titleEn: "Black Widow", year: 2021, phase: 4, type: "film" },
+    { id: "mcu-028", title: "What If...? (Staffel 1)", titleEn: "What If...?", year: 2021, phase: 4, type: "serie", tmdbType: "tv", tmdbId: 91363 },
+    { id: "mcu-029", title: "Shang-Chi and the Legend of the Ten Rings", titleEn: "Shang-Chi and the Legend of the Ten Rings", year: 2021, phase: 4, type: "film" },
+    { id: "mcu-030", title: "Eternals", titleEn: "Eternals", year: 2021, phase: 4, type: "film" },
+    { id: "mcu-031", title: "Hawkeye (Staffel 1)", titleEn: "Hawkeye", year: 2021, phase: 4, type: "serie", tmdbType: "tv", tmdbId: 88329 },
+    { id: "mcu-032", title: "Spider-Man: No Way Home", titleEn: "Spider-Man: No Way Home", year: 2021, phase: 4, type: "film" },
+    { id: "mcu-033", title: "Moon Knight (Staffel 1)", titleEn: "Moon Knight", year: 2022, phase: 4, type: "serie", tmdbType: "tv", tmdbId: 92749 },
+    { id: "mcu-034", title: "Doctor Strange in the Multiverse of Madness", titleEn: "Doctor Strange in the Multiverse of Madness", year: 2022, phase: 4, type: "film" },
+    { id: "mcu-035", title: "Ms. Marvel (Staffel 1)", titleEn: "Ms. Marvel", year: 2022, phase: 4, type: "serie", tmdbType: "tv", tmdbId: 92782 },
+    { id: "mcu-036", title: "Thor: Love and Thunder", titleEn: "Thor: Love and Thunder", year: 2022, phase: 4, type: "film" },
+    { id: "mcu-037", title: "She-Hulk: Die Anwaeltin (Staffel 1)", titleEn: "She-Hulk: Attorney at Law", year: 2022, phase: 4, type: "serie", tmdbType: "tv", tmdbId: 92783 },
+    { id: "mcu-038", title: "Werewolf by Night", titleEn: "Werewolf by Night", year: 2022, phase: 4, type: "special" },
+    { id: "mcu-039", title: "Black Panther: Wakanda Forever", titleEn: "Black Panther: Wakanda Forever", year: 2022, phase: 4, type: "film" },
+    { id: "mcu-040", title: "Guardians of the Galaxy Holiday Special", titleEn: "The Guardians of the Galaxy Holiday Special", year: 2022, phase: 4, type: "special" },
+
+    // === PHASE 5 ===
+    { id: "mcu-041", title: "Ant-Man and the Wasp: Quantumania", titleEn: "Ant-Man and the Wasp: Quantumania", year: 2023, phase: 5, type: "film" },
+    { id: "mcu-042", title: "Guardians of the Galaxy Vol. 3", titleEn: "Guardians of the Galaxy Vol. 3", year: 2023, phase: 5, type: "film" },
+    { id: "mcu-043", title: "Secret Invasion (Staffel 1)", titleEn: "Secret Invasion", year: 2023, phase: 5, type: "serie", tmdbType: "tv", tmdbId: 114472 },
+    { id: "mcu-044", title: "Loki (Staffel 2)", titleEn: "Loki", year: 2023, phase: 5, type: "serie", tmdbType: "tv", tmdbId: 84958, season: 2 },
+    { id: "mcu-045", title: "The Marvels", titleEn: "The Marvels", year: 2023, phase: 5, type: "film" },
+    { id: "mcu-046", title: "What If...? (Staffel 2)", titleEn: "What If...?", year: 2023, phase: 5, type: "serie", tmdbType: "tv", tmdbId: 91363, season: 2 },
+    { id: "mcu-047", title: "Echo (Staffel 1)", titleEn: "Echo", year: 2024, phase: 5, type: "serie", tmdbType: "tv", tmdbId: 122226 },
+    { id: "mcu-048", title: "Deadpool & Wolverine", titleEn: "Deadpool & Wolverine", year: 2024, phase: 5, type: "film" },
+    { id: "mcu-049", title: "Agatha All Along (Staffel 1)", titleEn: "Agatha All Along", year: 2024, phase: 5, type: "serie", tmdbType: "tv", tmdbId: 138501 },
+    { id: "mcu-050", title: "What If...? (Staffel 3)", titleEn: "What If...?", year: 2024, phase: 5, type: "serie", tmdbType: "tv", tmdbId: 91363, season: 3 },
+    { id: "mcu-051", title: "Your Friendly Neighborhood Spider-Man (Staffel 1)", titleEn: "Your Friendly Neighborhood Spider-Man", year: 2025, phase: 5, type: "serie", tmdbType: "tv", tmdbId: 206488 },
+    { id: "mcu-052", title: "Captain America: Brave New World", titleEn: "Captain America: Brave New World", year: 2025, phase: 5, type: "film" },
+    { id: "mcu-053", title: "Daredevil: Born Again (Staffel 1)", titleEn: "Daredevil: Born Again", year: 2025, phase: 5, type: "serie", tmdbType: "tv", tmdbId: 202555 },
+    { id: "mcu-054", title: "Thunderbolts*", titleEn: "Thunderbolts*", year: 2025, phase: 5, type: "film" },
+
+    // === PHASE 6 ===
+    { id: "mcu-055", title: "Ironheart (Staffel 1)", titleEn: "Ironheart", year: 2025, phase: 6, type: "serie", tmdbType: "tv", tmdbId: 114461 },
+    { id: "mcu-056", title: "The Fantastic Four: First Steps", titleEn: "The Fantastic Four: First Steps", year: 2025, phase: 6, type: "film" },
+    { id: "mcu-057", title: "Eyes of Wakanda (Staffel 1)", titleEn: "Eyes of Wakanda", year: 2025, phase: 6, type: "serie", tmdbType: "tv", tmdbId: 227365 },
+    { id: "mcu-058", title: "Wonder Man (Staffel 1)", titleEn: "Wonder Man", year: 2025, phase: 6, type: "serie", tmdbType: "tv", tmdbId: 197067 },
+    { id: "mcu-059", title: "Marvel Zombies (Staffel 1)", titleEn: "Marvel Zombies", year: 2025, phase: 6, type: "serie", tmdbType: "tv", tmdbId: 210530 },
+    { id: "mcu-060", title: "Avengers: Doomsday", titleEn: "Avengers: Doomsday", year: 2026, phase: 6, type: "film" },
+    { id: "mcu-061", title: "Avengers: Secret Wars", titleEn: "Avengers: Secret Wars", year: 2027, phase: 6, type: "film" },
+];
+
+// ============================================================
+// STATE
+// ============================================================
+let watchedEntries = JSON.parse(localStorage.getItem('mcu-watched') || '{}');
+let posterCache = JSON.parse(localStorage.getItem('mcu-posters') || '{}');
+const apiKey = '32969a2cce1154d80201d1db07e4e1a5';
+let currentFilter = 'all';
+let firebaseUrl = localStorage.getItem('firebase-url') || '';
+let syncCode = localStorage.getItem('sync-code') || '';
+let syncActive = false;
+
+// ============================================================
+// FIREBASE SYNC
+// ============================================================
+function generateSyncCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+}
+
+async function syncToFirebase() {
+    if (!firebaseUrl || !syncCode) return;
+    try {
+        await fetch(`${firebaseUrl}/tracker/${syncCode}/mcu-watched.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(watchedEntries)
+        });
+        setSyncStatus('connected');
+    } catch (e) {
+        console.warn('Firebase sync failed:', e);
+        setSyncStatus('error');
+    }
+}
+
+async function syncFromFirebase() {
+    if (!firebaseUrl || !syncCode) return;
+    try {
+        const res = await fetch(`${firebaseUrl}/tracker/${syncCode}/mcu-watched.json`);
+        const data = await res.json();
+        if (data && typeof data === 'object') {
+            watchedEntries = { ...watchedEntries, ...data };
+            localStorage.setItem('mcu-watched', JSON.stringify(watchedEntries));
+            renderApp();
+            setSyncStatus('connected');
+        }
+    } catch (e) {
+        console.warn('Firebase fetch failed:', e);
+        setSyncStatus('error');
+    }
+}
+
+function setSyncStatus(status) {
+    const el = document.getElementById('sync-status');
+    if (el) el.className = 'sync-status ' + status;
+}
+
+function startSyncLoop() {
+    if (syncActive) return;
+    syncActive = true;
+    setInterval(async () => { await syncFromFirebase(); }, 30000);
+}
+
+function showSyncModal() {
+    document.getElementById('firebase-url-input').value = firebaseUrl;
+    document.getElementById('sync-code-input').value = syncCode;
+    document.getElementById('sync-modal').style.display = 'flex';
+}
+
+async function saveSyncConfig() {
+    const url = document.getElementById('firebase-url-input').value.trim().replace(/\/+$/, '');
+    const code = document.getElementById('sync-code-input').value.trim().toUpperCase() || generateSyncCode();
+    if (!url) { alert('Bitte Firebase-URL eingeben'); return; }
+    firebaseUrl = url;
+    syncCode = code;
+    localStorage.setItem('firebase-url', firebaseUrl);
+    localStorage.setItem('sync-code', syncCode);
+    document.getElementById('sync-modal').style.display = 'none';
+    updateSyncBar();
+    await syncFromFirebase();
+    await syncToFirebase();
+    startSyncLoop();
+}
+
+function skipSync() {
+    document.getElementById('sync-modal').style.display = 'none';
+    renderApp();
+    fetchAllPosters();
+}
+
+function updateSyncBar() {
+    const bar = document.getElementById('sync-bar');
+    const display = document.getElementById('sync-code-display');
+    if (firebaseUrl && syncCode) {
+        bar.style.display = 'flex';
+        display.textContent = syncCode;
+        display.onclick = () => {
+            navigator.clipboard.writeText(syncCode);
+            display.textContent = 'Kopiert!';
+            setTimeout(() => { display.textContent = syncCode; }, 1500);
+        };
+    }
+}
+
+// ============================================================
+// TMDB API
+// ============================================================
+async function fetchPoster(entry) {
+    if (posterCache[entry.id]) return posterCache[entry.id];
+
+    try {
+        let posterPath = null;
+
+        if (entry.tmdbId && entry.tmdbType === 'tv') {
+            if (entry.season) {
+                const res = await fetch(`https://api.themoviedb.org/3/tv/${entry.tmdbId}/season/${entry.season}?api_key=${apiKey}&language=de-DE`);
+                const data = await res.json();
+                if (data.poster_path) posterPath = data.poster_path;
+            }
+            if (!posterPath) {
+                const res = await fetch(`https://api.themoviedb.org/3/tv/${entry.tmdbId}?api_key=${apiKey}&language=de-DE`);
+                const data = await res.json();
+                if (data.poster_path) posterPath = data.poster_path;
+            }
+        } else if (entry.tmdbId) {
+            const res = await fetch(`https://api.themoviedb.org/3/movie/${entry.tmdbId}?api_key=${apiKey}&language=de-DE`);
+            const data = await res.json();
+            if (data.poster_path) posterPath = data.poster_path;
+        } else {
+            const query = encodeURIComponent(entry.titleEn);
+            const res = await fetch(`https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${query}&year=${entry.year}&language=de-DE`);
+            const data = await res.json();
+            if (data.results && data.results.length > 0 && data.results[0].poster_path) {
+                posterPath = data.results[0].poster_path;
+            }
+        }
+
+        if (posterPath) {
+            const url = `https://image.tmdb.org/t/p/w342${posterPath}`;
+            posterCache[entry.id] = url;
+            localStorage.setItem('mcu-posters', JSON.stringify(posterCache));
+            return url;
+        }
+    } catch (e) {
+        console.warn('TMDB fetch failed for', entry.title, e);
+    }
+    return null;
+}
+
+async function fetchAllPosters() {
+    const uncached = ENTRIES.filter(e => !posterCache[e.id]);
+    if (uncached.length === 0) return;
+
+    for (let i = 0; i < uncached.length; i += 5) {
+        const batch = uncached.slice(i, i + 5);
+        await Promise.all(batch.map(async (entry) => {
+            const url = await fetchPoster(entry);
+            if (url) {
+                const img = document.querySelector(`[data-entry-id="${entry.id}"] img`);
+                if (img) {
+                    img.src = url;
+                    img.style.display = 'block';
+                    const placeholder = document.querySelector(`[data-entry-id="${entry.id}"] .placeholder`);
+                    if (placeholder) placeholder.style.display = 'none';
+                }
+            }
+        }));
+        if (i + 5 < uncached.length) await new Promise(r => setTimeout(r, 250));
+    }
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+function toggleWatched(entryId) {
+    watchedEntries[entryId] = !watchedEntries[entryId];
+    if (!watchedEntries[entryId]) delete watchedEntries[entryId];
+    localStorage.setItem('mcu-watched', JSON.stringify(watchedEntries));
+
+    const card = document.querySelector(`[data-entry-id="${entryId}"]`);
+    if (card) card.classList.toggle('watched', !!watchedEntries[entryId]);
+    updateStats();
+    applyFilter();
+    syncToFirebase();
+}
+
+function updateStats() {
+    const total = ENTRIES.length;
+    const watched = ENTRIES.filter(e => watchedEntries[e.id]).length;
+    document.getElementById('watched-count').textContent = watched;
+    document.getElementById('total-count').textContent = total;
+    const pct = total > 0 ? (watched / total * 100) : 0;
+    document.getElementById('progress-bar').style.width = pct + '%';
+}
+
+function applyFilter() {
+    document.querySelectorAll('.movie-card').forEach(card => {
+        const id = card.dataset.entryId;
+        const entry = ENTRIES.find(e => e.id === id);
+        let show = true;
+        if (currentFilter === 'watched') show = !!watchedEntries[id];
+        else if (currentFilter === 'unwatched') show = !watchedEntries[id];
+        else if (currentFilter === 'film') show = entry.type === 'film';
+        else if (currentFilter === 'serie') show = entry.type === 'serie';
+        else if (currentFilter === 'special') show = entry.type === 'special';
+        card.style.display = show ? '' : 'none';
+    });
+}
+
+function getEmoji(type) {
+    if (type === 'serie') return '📺';
+    if (type === 'special') return '⭐';
+    return '🎬';
+}
+
+function getTypeBadge(type) {
+    if (type === 'serie') return '<span class="type-badge serie">Serie</span>';
+    if (type === 'special') return '<span class="type-badge special">Special</span>';
+    return '<span class="type-badge film">Film</span>';
+}
+
+function renderCard(entry) {
+    const isWatched = watchedEntries[entry.id];
+    const hasPoster = posterCache[entry.id];
+
+    return `
+        <div class="movie-card ${isWatched ? 'watched' : ''}" data-entry-id="${entry.id}">
+            ${getTypeBadge(entry.type)}
+            <img src="${hasPoster ? posterCache[entry.id] : ''}"
+                 alt="${entry.title}"
+                 style="display: ${hasPoster ? 'block' : 'none'}"
+                 loading="lazy"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div class="placeholder" style="display: ${hasPoster ? 'none' : 'flex'}">
+                <div class="emoji">${getEmoji(entry.type)}</div>
+                <div class="title">${entry.title}</div>
+                <div class="year">${entry.year}</div>
+            </div>
+            <div class="overlay">
+                <div class="movie-title">${entry.title}</div>
+                <div class="movie-year">${entry.year}</div>
+            </div>
+            <div class="check">${isWatched ? '✓' : ''}</div>
+        </div>
+    `;
+}
+
+function renderApp() {
+    const app = document.getElementById('app');
+    const phases = [1, 2, 3, 4, 5, 6];
+    const phaseNames = {
+        1: 'Phase 1 – Die Anfaenge',
+        2: 'Phase 2 – Neue Helden',
+        3: 'Phase 3 – Infinity Saga',
+        4: 'Phase 4 – Multiverse Saga',
+        5: 'Phase 5 – Multiverse Saga',
+        6: 'Phase 6 – Multiverse Saga'
+    };
+
+    let html = '';
+    for (const phase of phases) {
+        const phaseEntries = ENTRIES.filter(e => e.phase === phase);
+        const phaseWatched = phaseEntries.filter(e => watchedEntries[e.id]).length;
+        html += `
+            <div class="section">
+                <h2>${phaseNames[phase]} <span class="count">${phaseWatched}/${phaseEntries.length}</span></h2>
+                <div class="grid">${phaseEntries.map(e => renderCard(e)).join('')}</div>
+            </div>
+        `;
+    }
+    app.innerHTML = html;
+
+    document.querySelectorAll('.movie-card').forEach(card => {
+        card.addEventListener('click', () => toggleWatched(card.dataset.entryId));
+    });
+    updateStats();
+}
+
+// ============================================================
+// FILTER BUTTONS
+// ============================================================
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        applyFilter();
+    });
+});
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+    renderApp();
+    fetchAllPosters();
+    updateSyncBar();
+
+    if (firebaseUrl && syncCode) {
+        await syncFromFirebase();
+        startSyncLoop();
+    } else {
+        document.getElementById('sync-modal').style.display = 'flex';
+    }
+}
+
+init();
+</script>
+
+</body>
+</html>
